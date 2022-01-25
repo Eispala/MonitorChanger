@@ -15,20 +15,74 @@ namespace MonitorChangerNamespace
 
     class MonitorChanger
     {
+
+        public static void ShowMonitor(int monitorID, bool onlyAttached)
+        {
+            DISPLAY_DEVICE device = new DISPLAY_DEVICE();
+
+            device.cb = Marshal.SizeOf(device);
+
+            bool deviceAccessSuccessful = NativeMethods.EnumDisplayDevices(null, (uint)monitorID, ref device, 0);
+
+            if (deviceAccessSuccessful)
+            {
+                Console.WriteLine($"Data for screen: {monitorID}");
+
+                DEVMODE deviceMode = new DEVMODE();
+
+                NativeMethods.EnumDisplaySettings(device.DeviceName, -1, ref deviceMode);
+                Console.WriteLine($"Position X: {deviceMode.dmPosition.x}, Position Y: {deviceMode.dmPosition.y}");
+                Console.WriteLine($"Width: {deviceMode.dmPelsWidth}, Height: {deviceMode.dmPelsHeight}");
+                Console.WriteLine($"IsPrimary: {device.StateFlags.HasFlag(DisplayDeviceStateFlags.PrimaryDevice)}");
+                if(!onlyAttached)
+                {
+                    Console.WriteLine($"Is Attached: {device.StateFlags.HasFlag(DisplayDeviceStateFlags.AttachedToDesktop)}");
+
+                }
+            }
+
+            Console.WriteLine("");
+
+        }
+
+        public static void ListMonitors(bool onlyAttached = true)
+        {
+            DISPLAY_DEVICE device = new DISPLAY_DEVICE();
+            device.cb = Marshal.SizeOf(device);
+
+            for (uint currentDeviceID = 0; NativeMethods.EnumDisplayDevices(null, currentDeviceID, ref device, 0); currentDeviceID++)
+            {
+                //Note: if you don't know if the monitors are being listed
+                //you can simply uncomment the following lines to know what's being listed
+
+                if (onlyAttached)
+                {
+                    if(device.StateFlags.HasFlag(DisplayDeviceStateFlags.AttachedToDesktop))
+                    {
+                        ShowMonitor((int)currentDeviceID, onlyAttached);
+                    }
+                }
+                else
+                {
+                    ShowMonitor((int)currentDeviceID, onlyAttached);
+                }
+            }
+        }
+
         /// <summary>
         /// Static method that defines the given int (identifier of the monitor) to set as primary.
         /// </summary>
-        /// <param name="id"></param>
-        public static void SetAsPrimaryMonitor(uint id)
+        /// <param name="newPrimaryScreenID"></param>
+        public static void SetAsPrimaryMonitor(uint newPrimaryScreenID)
         {
-            DISPLAY_DEVICE device = new DISPLAY_DEVICE();
-            DEVMODE deviceMode = new DEVMODE();
+            var device = new DISPLAY_DEVICE();
+            var deviceMode = new DEVMODE();
             device.cb = Marshal.SizeOf(device);
 
-            NativeMethods.EnumDisplayDevices(null, id, ref device, 0);
+            NativeMethods.EnumDisplayDevices(null, newPrimaryScreenID, ref device, 0);
             NativeMethods.EnumDisplaySettings(device.DeviceName, -1, ref deviceMode);
-            int offsetx = deviceMode.dmPosition.x;
-            int offsety = deviceMode.dmPosition.y;
+            var offsetx = deviceMode.dmPosition.x;
+            var offsety = deviceMode.dmPosition.y;
             deviceMode.dmPosition.x = 0;
             deviceMode.dmPosition.y = 0;
 
@@ -37,55 +91,38 @@ namespace MonitorChangerNamespace
                 ref deviceMode,
                 (IntPtr)null,
                 (ChangeDisplaySettingsFlags.CDS_SET_PRIMARY | ChangeDisplaySettingsFlags.CDS_UPDATEREGISTRY | ChangeDisplaySettingsFlags.CDS_NORESET),
-                IntPtr.Zero
-            );
+                IntPtr.Zero);
 
             device = new DISPLAY_DEVICE();
             device.cb = Marshal.SizeOf(device);
 
             // Update remaining devices
-            for (uint otherid = 0; NativeMethods.EnumDisplayDevices(null, otherid, ref device, 0); otherid++)
+            for (uint loopedScreenID = 0; NativeMethods.EnumDisplayDevices(null, loopedScreenID, ref device, 0); loopedScreenID++)
             {
-                //Note: if you don't know if the monitors are being listed
-                //you can simply uncomment the following lines to know what's being listed
-
-
-                if (device.StateFlags.HasFlag(DisplayDeviceStateFlags.AttachedToDesktop) && otherid != id)
+                if (device.StateFlags.HasFlag(DisplayDeviceStateFlags.AttachedToDesktop) && loopedScreenID != newPrimaryScreenID)
                 {
-                    Console.WriteLine("===================");
-                    Console.WriteLine("Monitor ID: " + otherid);
-                    Console.WriteLine("Device: " + device);
-                    Console.WriteLine(device.DeviceName);
-                    Console.WriteLine(device.DeviceID);
-                    Console.WriteLine(device.DeviceString);
-                    Console.WriteLine(device.DeviceKey);
-
                     device.cb = Marshal.SizeOf(device);
-                    DEVMODE otherDeviceMode = new DEVMODE();
+                    var otherDeviceMode = new DEVMODE();
 
                     NativeMethods.EnumDisplaySettings(device.DeviceName, -1, ref otherDeviceMode);
-                    Console.WriteLine($"X: {otherDeviceMode.dmPosition.x}, Y: {otherDeviceMode.dmPosition.y}");
-                    Console.WriteLine($"Width: {otherDeviceMode.dmPelsWidth}, Height: {otherDeviceMode.dmPelsHeight}");
-
-                    Console.WriteLine("===================");
 
                     otherDeviceMode.dmPosition.x -= offsetx;
                     otherDeviceMode.dmPosition.y -= offsety;
 
-                    //NativeMethods.ChangeDisplaySettingsEx(
-                    //    device.DeviceName,
-                    //    ref otherDeviceMode,
-                    //    (IntPtr)null,
-                    //    (ChangeDisplaySettingsFlags.CDS_UPDATEREGISTRY | ChangeDisplaySettingsFlags.CDS_NORESET),
-                    //    IntPtr.Zero
-                    //);
+                    NativeMethods.ChangeDisplaySettingsEx(
+                        device.DeviceName,
+                        ref otherDeviceMode,
+                        (IntPtr)null,
+                        (ChangeDisplaySettingsFlags.CDS_UPDATEREGISTRY | ChangeDisplaySettingsFlags.CDS_NORESET),
+                        IntPtr.Zero);
+
                 }
 
                 device.cb = Marshal.SizeOf(device);
             }
 
             // Apply settings
-            //NativeMethods.ChangeDisplaySettingsEx(null, IntPtr.Zero, (IntPtr)null, ChangeDisplaySettingsFlags.CDS_NONE, (IntPtr)null);
+            NativeMethods.ChangeDisplaySettingsEx(null, IntPtr.Zero, (IntPtr)null, ChangeDisplaySettingsFlags.CDS_NONE, (IntPtr)null);
         }
     }
 
